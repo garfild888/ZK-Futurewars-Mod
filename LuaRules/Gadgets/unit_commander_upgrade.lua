@@ -36,6 +36,7 @@ local spRemoveUnitCmdDesc = Spring.RemoveUnitCmdDesc
 local spSetUnitStealth = Spring.SetUnitStealth
 local spGetUnitHealth = Spring.GetUnitHealth
 local CMD_UPGRADE_STOP = Spring.Utilities.CMD.UPGRADE_STOP
+local GaiaTeamID = Spring.GetGaiaTeamID()
 local zombies = false
 
 local defaultProfiles = {
@@ -48,13 +49,19 @@ local defaultProfiles = {
 	[7] = "dyntrainer_riot",
 }
 
+local freeWreckModule = true
+
 do
 	local modoptions = Spring.GetModOptions()
 	if tonumber(modoptions.zombies) == 1 then
 		zombies = true
 	end
+	if tonumber(modoptions.requirewreckmodule) or 0 == 1 then
+		freeWreckModule = false
+	end
 end
 
+local recentlyResurrected = {} -- do on the next frame.
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -243,6 +250,12 @@ local defaultaddons = {
 	},
 }
 
+if freeWreckModule then
+	for i = 1, #defaultaddons do
+		defaultaddons[i][#defaultaddons[i] + 1] = "module_resmodule"
+	end
+end
+
 local function GetCommanderChassisDefaultWeapon(type)
 	--Spring.Echo(type)
 	return defaultweapon[type]
@@ -401,6 +414,9 @@ local function ApplyModuleEffects(unitID, data, totalCost, images, chassis)
 		spSetUnitRulesParam(unitID, "commander_reconpulse", 1, INLOS)
 		StartReconPulse(unitID)
 	end
+	if data.alwaysDropWreck then
+		spSetUnitRulesParam(unitID, "commander_alwaysdropwreck", 1, INLOS)
+	end
 	if data.cloakregen then
 		GG.AddCloakRegenOverride(unitID, data.cloakregen)
 		spSetUnitRulesParam(unitID, "commcloakregen", data.cloakregen)
@@ -543,7 +559,7 @@ local function ApplyModuleEffects(unitID, data, totalCost, images, chassis)
 		spSetUnitRulesParam(unitID, "comm_banner_overhead", images.overhead or "fakeunit", INLOS)
 	end
 	
-	if data.drones or data.droneheavyslows or data.dronecon or data.droneassault then
+	if data.drones or data.droneheavyslows or data.dronecon or data.droneassault or data.dronesplus or data.droneheavyslowsplus or data.droneconplus or data.droneassaultplus then
 		if data.drones then
 			spSetUnitRulesParam(unitID, "carrier_count_drone", data.drones, INLOS)
 		end
@@ -555,6 +571,18 @@ local function ApplyModuleEffects(unitID, data, totalCost, images, chassis)
 		end
 		if data.droneassault then
 			spSetUnitRulesParam(unitID, "carrier_count_droneassault", data.droneassault, INLOS)
+		end
+		if data.dronesplus then
+			spSetUnitRulesParam(unitID, "carrier_count_droneplus", data.dronesplus, INLOS)
+		end
+		if data.droneheavyslowsplus then
+			spSetUnitRulesParam(unitID, "carrier_count_droneheavyslowplus", data.droneheavyslowsplus, INLOS)
+		end
+		if data.droneconplus then
+			spSetUnitRulesParam(unitID, "carrier_count_droneconplus", data.droneconplus, INLOS)
+		end
+		if data.droneassaultplus then
+			spSetUnitRulesParam(unitID, "carrier_count_droneassaultplus", data.droneassaultplus, INLOS)
 		end
 		if GG.Drones_InitializeDynamicCarrier then
 			GG.Drones_InitializeDynamicCarrier(unitID)
@@ -718,7 +746,8 @@ local function InitializeDynamicCommander(unitID, level, chassis, totalCost, nam
 	end
 	
 	if moduleEffectData.areaCloak then
-		unitCreatedCloakShield = true
+		--unitCreatedCloakShield = true
+		GG.AddCloakShieldUnit(unitID, commanderCloakShieldDef)
 	end
 	if level == 1 and not moduleEffectData.weapon1 then
 		local default = GetCommanderChassisDefaultWeapon(chassis)
@@ -1003,6 +1032,55 @@ local function GetCommanderInfoFromWreck(featureID, unitID)
 	return modules, totalCost, level, name, baseWreckID, baseHeapID, profileID, chassisID
 end
 
+local function CreateZombieCommanderFromFeature(featureID, x, y, z, unitDef, facing)
+	local unitDefID = UnitDefNames[unitDef].id
+	Spring.Echo("Spawning " .. unitDef .. " ( " .. unitDefID .. ")")
+	local unitID = Spring.CreateUnit(unitDef, x, y, z, facing, GaiaTeamID)
+	if not unitID then
+		Spring.Echo("[unit_commander_upgrade]: Failed to resurrect commander from featureID " .. featureID)
+		return
+	end
+	local modules, totalCost, level, name, baseWreckID, baseHeapID, profileID, chassisID = GetCommanderInfoFromWreck(featureID, unitID)
+	local profileID = profileID or GG.ModularCommAPI.GetProfileIDByBaseDefID(unitDefID)
+	local commProfileInfo = GG.ModularCommAPI.GetCommProfileInfo(profileID)
+	local moduleEffects = GetModuleEffectsData(modules, level, chassisID)
+	if commProfileInfo then
+		InitializeDynamicCommander(
+			unitID,
+			level,
+			chassisID,
+			totalCost,
+			name,
+			unitDefID,
+			baseWreckID,
+			baseHeapID,
+			modules,
+			moduleEffects,
+			commProfileInfo.images,
+			profileID
+		)
+	else
+		InitializeDynamicCommander(
+			unitID,
+			level,
+			chassisID,
+			totalCost,
+			name,
+			unitDefID,
+			baseWreckID,
+			baseHeapID,
+			modules,
+			moduleEffects,
+			{},
+			profileID
+		)
+	end
+	--ApplyModuleEffectsFromUnitRulesParams(unitID)
+	GG.ReinitCloak(unitID, unitDefID)
+	Spring.DestroyFeature(featureID)
+	return unitID
+end
+
 function gadget:UnitCreated(unitID, unitDefID, unitTeam, builderID)
 	local isCommander = UnitDefs[unitDefID].customParams.commtype or UnitDefs[unitDefID].customParams.level or UnitDefs[unitDefID].customParams.dynamic_comm
 	if not isCommander then -- filter out the normal units
@@ -1059,6 +1137,7 @@ function gadget:UnitCreated(unitID, unitDefID, unitTeam, builderID)
 						profileID
 					)
 				end
+				--ApplyModuleEffectsFromUnitRulesParams(unitID)
 				GG.ReinitCloak(unitID, unitDefID)
 				return
 			end
@@ -1334,6 +1413,7 @@ function gadget:Initialize()
 	GG.Upgrades_CreateUpgradedUnit         = Upgrades_CreateUpgradedUnit
 	GG.Upgrades_CreateStarterDyncomm       = Upgrades_CreateStarterDyncomm
 	GG.Upgrades_GetValidAndMorphAttributes = Upgrades_GetValidAndMorphAttributes
+	GG.CreateZombieCommanderFromFeature    = CreateZombieCommanderFromFeature
 	
 	-- load active units
 	for _, unitID in ipairs(Spring.GetAllUnits()) do

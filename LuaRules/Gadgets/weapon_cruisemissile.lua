@@ -70,6 +70,7 @@ for i=1, #WeaponDefs do
 		config[i].airlaunched = customParams.airlaunched ~= nil
 		config[i].droptoalt = customParams.droptoalt ~= nil
 		config[i].noascension = customParams.cruise_noascension ~= nil
+		config[i].torpedodepth = customParams.cruise_torpedo ~= nil
 		config[i].radius = tonumber(customParams.cruiserandomradius)
 		config[i].permoffset = customParams.cruise_permoffset ~= nil
 		config[i].finaltracking = customParams.cruise_nolock == nil
@@ -226,13 +227,28 @@ local function IsMissileCruiseDone(id) -- other gadgets can look up if the missi
 	return data ~= nil
 end
 
-local function ForceUpdate(id, x, y, z)
+local function ForceUpdate(id, x, y, z, t)
 	local data = IterableMap.Get(missiles, id)
 	if data then
 		if type(data.target) == "table" then
 			data.target[1] = x
 			data.target[2] = y
 			data.target[3] = z
+		end
+		if t then -- force update.
+			data.type = t
+			if t == 'ground' then
+				data.type = 'ground'
+				data.target = {[1] = x, [2] = y, [3] = z}
+			else
+				data.type = t
+				data.target = x
+				data.unguided = false
+				data.originaltarget = x
+				data.altitudestayframes = 0
+				data.cruising = false
+				data.takeoff = true
+			end
 		end
 	end
 end	
@@ -346,7 +362,19 @@ function gadget:GameFrame(f)
 					if cy <= 0 then -- we're not in the water, so don't bother.
 						local success
 						if not missileconfig.splittarget then
-							wantedalt = missileconfig.altitude
+							if data.surfacetarget or not missileconfig.torpedodepth then
+								wantedalt = missileconfig.altitude
+							else -- check if it's a UW target or a surface target
+								local targetDepth = 0 - spGetGroundHeight(x, z)
+								local waterLineDepth = 0 - spGetGroundHeight(cx, cz) -- current depth
+								if -y > targetDepth - 20 then -- this is a UW target
+									wantedalt = -waterLineDepth - missileconfig.altitude
+									if wantedalt > 0 then wantedalt = 0 end
+								else -- this is a surface target or sub near surface.
+									wantedalt = missileconfig.altitude -- stick with the original height
+									data.surfacetarget = true
+								end
+							end
 						end
 						--spEcho("Current Depth: " .. cy .. "(" .. wantedalt .. ")")
 						if data.takeoff and (cy > math.min(wantedalt + 40, -5) or cy < wantedalt - 40) then -- we aren't at the correct height yet, but avoid aiming out of water or at ground.
