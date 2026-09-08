@@ -15,14 +15,11 @@ return {
 		canSelfDestruct       = false,
 		category              = "FAKEUNIT",
 		cruiseAltitude        = 1000000000,
+		verticalSpeed         = 100,
 		
 		customParams          = {
 			dontcount         = 1,
 			dontkill          = 1,
-			area_cloak = 1,
-			area_cloak_upkeep = 0,
-			area_cloak_radius = 50,
-			area_cloak_grow_rate = 500,
 			completely_hidden = 1, -- for widget-senpai not to notice me >w<
 			singuimmune = 1,
 		},
@@ -40,7 +37,7 @@ return {
 		metalCost             = 0.45,
 		minCloakDistance      = 9,
 		noAutoFire            = false,
-		objectName            = "debris1x1b.s3o",
+		objectName            = "nothing.s3o",
 		script                = "fakeunit_los.lua",
 		sightDistance         = 660,
 		speed                 = 150,

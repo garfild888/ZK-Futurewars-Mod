@@ -25,8 +25,8 @@ local CMD_WAIT_AT_BEACON = Spring.Utilities.CMD.WAIT_AT_BEACON
 local CMD_WANT_CLOAK = Spring.Utilities.CMD.WANT_CLOAK
 
 local testoffsets = {
-	["amphtele"] = 16,
-	["factoryamph"] = 60,
+	["amphtele"] = 160,
+	["factoryamph"] = 160,
 }
 
 -- Used in synced and unsynced
@@ -327,7 +327,7 @@ local function GetTeleTargetPosRandomNoBuildTest(ud, unitID, unitDefID, tx, ty, 
 	local distance = size*4 + offset
 	--Spring.Echo("Distance: " .. distance)
 	local dirOffset = ((math.random() > 0.5) and math.pi/4) or -math.pi/4
-	local testoffset = testoffsets[teleporterdef.name] or 16
+	local testoffset = testoffsets[teleporterdef.name] or 160
 	for i = 1, 8 do -- Just try 10 times
 		local ux, uz = math.cos(direction), math.sin(direction)
 		if ud.canFly then

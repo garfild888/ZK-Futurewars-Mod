@@ -6,6 +6,7 @@ local base, turret, arm_1, arm_2, arm_3, nanobase, nanoemit, pad, nozzle, cylind
 local nanoPieces = { nanoemit }
 local smokePiece = { base, body }
 local spGetUnitRulesParam = Spring.GetUnitRulesParam
+local BEACON_SPAWN_SPEED = 8 / tonumber(UnitDef.customParams.teleporter_beacon_spawn_time)
 
 local function Open ()
 	Signal (1)
